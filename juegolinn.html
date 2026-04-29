@@ -183,23 +183,20 @@
 
   button {
     padding: 12px 25px;
-    margin-bottom: 10px;
     font-size: 1.1rem;
     font-weight: bold;
     border: none;
-    background: linear-gradient(135deg, #f16200, #ff9046);
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
     color: white;
-    border-radius: 1.5rem;
+    border-radius: 8px;
     cursor: pointer;
-    gap: 10px;
-    display: inline-block;
     box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
     transition: transform 0.1s;
     z-index: 1;
   }
 
   button:active { transform: translateY(2px); }
-  button:hover { background: linear-gradient(135deg, #1a3669, #09275e); }
+  button:hover { background: linear-gradient(135deg, #60a5fa, #3b82f6); }
 
   /* Estilos de la Tabla de Liderazgo */
   #leaderboard {
@@ -292,7 +289,6 @@
 <div id="game"></div>
 
 <button id="startBtn" onclick="startGame()">Iniciar Juego</button>
-<button id="viewLeaderboardBtn" onclick="toggleLeaderboard(true)">Ver Ranking</button>
 
 <div id="leaderboard">
   <h2>🏆 ¡Torneo Finalizado! 🏆</h2>
@@ -323,18 +319,34 @@
     </tr>
   </table>
   <br>
-  <button id="backBtn" onclick="toggleLeaderboard(false)" style="display:none;">Volver</button>
   <button onclick="location.reload()">Jugar Nueva Partida</button>
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-analytics.js";
-import { getDatabase, ref, push, onValue, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+/* --- Firebase Configuration --- */
+// Reemplaza esto con tu propia configuración de Firebase
+// Puedes obtenerla desde la consola de Firebase al crear una nueva app web
+const firebaseConfig = {
+  apiKey: "TU_API_KEY", // <-- Reemplaza con tu clave API
+  authDomain: "TU_PROYECTO_ID.firebaseapp.com",
+  databaseURL: "https://TU_PROYECTO_ID-default-rtdb.firebaseio.com",
+  projectId: "TU_PROYECTO_ID",
+  storageBucket: "TU_PROYECTO_ID.appspot.com",
+  messagingSenderId: "TU_MESSAGING_SENDER_ID",
+  appId: "TU_APP_ID"
+};
 
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+import { getDatabase, ref, push, onValue, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
+// Si deseas usar Analytics, descomenta la siguiente línea y la inicialización:
+// import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-analytics.js";
+
+// Tu configuración de Firebase proporcionada:
 const firebaseConfig = {
   apiKey: "AIzaSyB8125Zh8lGGapYy2dYX60u3kvCvYrgAgI",
   authDomain: "real-time-database-8f390.firebaseapp.com",
+  databaseURL: "https://real-time-database-8f390-default-rtdb.firebaseio.com", // Inferido de projectId
   projectId: "real-time-database-8f390",
   storageBucket: "real-time-database-8f390.firebasestorage.app",
   messagingSenderId: "439879258244",
@@ -342,13 +354,13 @@ const firebaseConfig = {
   measurementId: "G-0QZSYKWF7J"
 };
 
-// Inicializar Firebase
+// Inicializa Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-const db = getDatabase(app);
-const scoresRef = ref(db, 'rankings');
+const database = getDatabase(app);
+// Si deseas usar Analytics, descomenta la siguiente línea:
+// const analytics = getAnalytics(app);
+/* --- Fin de la configuración de Firebase --- */
 
-// Selectores de DOM
 const game = document.getElementById("game");
 const scoreEl = document.getElementById("score");
 const roundInfo = document.getElementById("roundInfo");
@@ -365,6 +377,10 @@ let gameInterval;
 let roundTimeout;
 let speed = 1000;
 let isPlaying = false;
+
+// Exponer funciones al ámbito global para que puedan ser llamadas desde el HTML
+window.startGame = startGame;
+window.saveAndShowLeaderboard = saveAndShowLeaderboard;
 
 // Orden del teclado numérico correcto (arriba hacia abajo, izquierda a derecha)
 const numpadLayout = [7, 8, 9, 4, 5, 6, 1, 2, 3];
@@ -476,7 +492,6 @@ function startGame() {
   scoreEl.textContent = score;
   isPlaying = true;
   startBtn.style.display = "none";
-  document.getElementById("viewLeaderboardBtn").style.display = "none";
   roundInfo.textContent = "¡A golpear!";
   roundInfo.style.color = "#4ade80";
   roundDisplay.textContent = round + "/3";
@@ -501,86 +516,67 @@ function endRound() {
     roundInfo.textContent = `¡Ronda ${round - 1} terminada! ¿Listos para la Ronda ${round}?`;
     roundInfo.style.color = "#fcd34d";
     startBtn.textContent = `Iniciar Ronda ${round}`;
-    startBtn.style.display = "inline-block";
-    document.getElementById("viewLeaderboardBtn").style.display = "inline-block";
+    startBtn.style.display = "block";
   } else {
     // Terminan las 3 rondas, mostrar tabla de posiciones
     scoreboardContainer.style.display = "none";
     game.style.display = "none";
     startBtn.style.display = "none";
-    document.getElementById("viewLeaderboardBtn").style.display = "none";
     
     finalScoreDisplay.textContent = totalScore;
     leaderboard.style.display = "block";
-    document.getElementById("nameInputContainer").style.display = "block";
-    document.querySelector(".total-score-highlight").style.display = "block";
-    document.getElementById("backBtn").style.display = "none";
-    document.querySelector("#leaderboard h2").textContent = "🏆 ¡Torneo Finalizado! 🏆";
+    renderLeaderboard();
   }
 }
 
 function saveAndShowLeaderboard() {
   const name = document.getElementById("playerName").value.trim() || "Anónimo";
-  const newEntry = { 
-    name: name, 
-    score: totalScore, 
-    timestamp: Date.now() 
-  };
-
-  // Guardar en Firebase
-  push(scoresRef, newEntry);
+  const newEntry = { name: name, score: totalScore, date: new Date().toLocaleDateString() };
+  
+  // Guardar el nuevo puntaje en Firebase
+  push(ref(database, 'scores'), newEntry)
+    .then(() => {
+      console.log("Puntaje guardado en Firebase.");
+    })
+    .catch((error) => {
+      console.error("Error al guardar el puntaje en Firebase:", error);
+    });
   
   document.getElementById("nameInputContainer").style.display = "none";
+  renderLeaderboard();
 }
 
-function toggleLeaderboard(show) {
-  leaderboard.style.display = show ? "block" : "none";
-  game.style.display = show ? "none" : "grid";
-  scoreboardContainer.style.display = show ? "none" : "block";
-  startBtn.style.display = show ? "none" : "inline-block";
-  document.getElementById("viewLeaderboardBtn").style.display = show ? "none" : "inline-block";
-
-  if (show) {
-    // Al consultar manualmente, ocultamos la opción de guardar nombre y el puntaje de la partida actual
-    document.getElementById("nameInputContainer").style.display = "none";
-    document.querySelector(".total-score-highlight").style.display = "none";
-    document.getElementById("backBtn").style.display = "inline-block";
-    document.querySelector("#leaderboard h2").textContent = "🏆 Ranking Global 🏆";
-  }
-}
-
-// Escuchar cambios en TIEMPO REAL de Firebase
-const topScoresQuery = query(scoresRef, orderByChild('score'), limitToLast(10));
-
-onValue(topScoresQuery, (snapshot) => {
+function renderLeaderboard() {
   const listContainer = document.getElementById("leaderboardList");
   listContainer.innerHTML = "";
-  const scores = [];
 
-  snapshot.forEach((child) => {
-    scores.push(child.val());
+  // Escuchar cambios en tiempo real en Firebase
+  onValue(query(ref(database, 'scores'), orderByChild('score'), limitToLast(10)), (snapshot) => {
+    let highScores = [];
+    snapshot.forEach((childSnapshot) => {
+      highScores.push(childSnapshot.val());
+    });
+
+    // Firebase's limitToLast ordena por clave, así que necesitamos ordenar por puntaje descendente
+    highScores.sort((a, b) => b.score - a.score);
+
+    listContainer.innerHTML = ""; // Limpiar la lista antes de renderizar para evitar duplicados
+
+    highScores.forEach((entry, index) => {
+      const item = document.createElement("div");
+      item.classList.add("ranking-item");
+      if (index === 0) item.classList.add("rank-1");
+      if (index === 1) item.classList.add("rank-2");
+      if (index === 2) item.classList.add("rank-3");
+
+      item.innerHTML = `
+        <span>${index + 1}. ${entry.name}</span>
+        <span>${entry.score} pts</span>
+      `;
+      listContainer.appendChild(item);
+    });
   });
-
-  // Firebase ordena de menor a mayor, invertimos para el ranking (Top 1)
-  scores.reverse().forEach((entry, index) => {
-    const item = document.createElement("div");
-    item.classList.add("ranking-item");
-    if (index === 0) item.classList.add("rank-1");
-    if (index === 1) item.classList.add("rank-2");
-    if (index === 2) item.classList.add("rank-3");
-
-    item.innerHTML = `
-      <span>${index + 1}. ${entry.name}</span>
-      <span>${entry.score} pts</span>
-    `;
-    listContainer.appendChild(item);
-  });
-});
-
-// IMPORTANTE: Exponer funciones al objeto window para que los botones HTML funcionen
-window.startGame = startGame;
-window.saveAndShowLeaderboard = saveAndShowLeaderboard;
-window.toggleLeaderboard = toggleLeaderboard;
+}
 </script>
 
 </body>
